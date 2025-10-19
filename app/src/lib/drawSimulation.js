@@ -514,13 +514,15 @@ export function validateDrawState(teams, allMatches) {
  */
 export function getNextDrawRound(teams, allMatches) {
   // 获取有效的比赛数据（包括用户在界面上设置的胜者）
-  const validMatches = allMatches.filter(match => 
-    match.winner && 
+  const validMatches = allMatches.filter(match =>
+    match.winner &&
     match.winner !== null &&
-    match.teamA !== 'TBD' && 
+    match.teamA !== 'TBD' &&
     match.teamB !== 'TBD'
   );
-  
+
+  console.log('validMatches.size:', validMatches.length);
+
   // 按轮次统计已完成的比赛数量
   const roundCompletionStatus = {};
   for (let round = 1; round <= 5; round++) {
@@ -532,14 +534,14 @@ export function getNextDrawRound(teams, allMatches) {
       isComplete: roundMatches.length >= expectedMatches
     };
   }
-  
+
   // 找到第一个未完成的轮次
   for (let round = 1; round <= 5; round++) {
     if (!roundCompletionStatus[round].isComplete) {
       return round;
     }
   }
-  
+
   // 如果所有轮次都完成了，返回下一轮（最多5轮）
   return 6;
 }
@@ -550,13 +552,13 @@ export function getNextDrawRound(teams, allMatches) {
  * @returns {number} - 预期比赛数量
  */
 function getExpectedMatchesForRound(round) {
-  // 根据瑞士制规则，每轮的比赛数量
+  // 根据瑞士制规则，每轮的比赛数量（三胜）
   switch (round) {
     case 1: return 8; // 16队分8场比赛
     case 2: return 8; // 16队分8场比赛
     case 3: return 8; // 16队分8场比赛
-    case 4: return 8; // 16队分8场比赛
-    case 5: return 8; // 16队分8场比赛
+    case 4: return 6; 
+    case 5: return 3;
     default: return 8;
   }
 }

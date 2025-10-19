@@ -30,6 +30,18 @@
   
   // 计算默认的目标轮次
   $: defaultTargetRound = (() => {
+    // Explicitly depend on isOpen to trigger re-calculation when modal opens
+    if (!isOpen) {
+      console.log('[DrawSimulationModal] modal is closed, defaultTargetRound not calculated.');
+      return 2; // A default safe value when modal is closed
+    }
+
+    console.log('[DrawSimulationModal] calculating defaultTargetRound due to isOpen change or dependencies update', {
+      teamsCount: Array.isArray(teams) ? teams.length : 0,
+      allMatchesCount: Array.isArray(allMatches) ? allMatches.length : 0,
+      isOpen // Explicitly include isOpen as a dependency
+    });
+
     const nextRound = getNextDrawRound(teams, allMatches);
     // TODO: 第1轮抽签暂不支持（涉及种子设定）
     return nextRound <= 5 && nextRound > 1 ? nextRound : 2;
@@ -46,9 +58,16 @@
 
   // 计算可用的轮次选项
   $: availableRounds = (() => {
-    console.log('[DrawSimulationModal] calculating availableRounds', {
+    // Explicitly depend on isOpen to trigger re-calculation when modal opens
+    if (!isOpen) {
+      console.log('[DrawSimulationModal] modal is closed, availableRounds not calculated.');
+      return [];
+    }
+
+    console.log('[DrawSimulationModal] calculating availableRounds due to isOpen change or dependencies update', {
       teamsCount: Array.isArray(teams) ? teams.length : 0,
-      allMatchesCount: Array.isArray(allMatches) ? allMatches.length : 0
+      allMatchesCount: Array.isArray(allMatches) ? allMatches.length : 0,
+      isOpen // Explicitly include isOpen as a dependency
     });
     
     const nextRound = getNextDrawRound(teams, allMatches);
@@ -66,6 +85,8 @@
 
   function closeModal() {
     isOpen = false;
+    // 重置targetRound，确保下次打开时根据最新状态重新计算
+    targetRound = undefined;
   }
 
   function handleBackdropClick(event) {
@@ -254,7 +275,7 @@
     background: #8b5cf6;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 10px 15px; /* Reduced horizontal padding */
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
@@ -418,7 +439,7 @@
     background: #10b981;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 10px 15px; /* Reduced horizontal padding */
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
