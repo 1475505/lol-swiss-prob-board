@@ -40,6 +40,8 @@ jobs:
       - name: Build
         working-directory: ./app
         run: npm run build
+        env:
+          CUSTOM_DOMAIN: true
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
