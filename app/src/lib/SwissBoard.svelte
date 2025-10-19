@@ -6,6 +6,7 @@
     getPossibleOpponents,
     getTeamStatus
   } from './swissLogic.js';
+  import DrawSimulationModal from './DrawSimulationModal.svelte';
 
   
   let teams = [];
@@ -15,8 +16,26 @@
   let incompleteMatches = []; // 2. JSON获取的真实数据，winner为null的，支持用户指定胜者
   let tbdMatches = []; // 3. 缺失的比赛数据，由TBD vs TBD填充，支持用户选择对手和胜者
   
+  // 模拟抽签弹窗状态
+  let showDrawModal = false;
+  
   // 按轮次组织比赛数据 - 依赖所有比赛容器以确保响应式更新
   $: roundsData = generateRoundsData(teams, completedMatches, incompleteMatches, tbdMatches);
+  
+  // 响应式聚合所有比赛，供模态框使用 - 直接依赖三个数组变量
+  $: allMatchesForModal = [...completedMatches, ...incompleteMatches, ...tbdMatches];
+  
+  // 调试日志：监控 allMatchesForModal 的变化
+  $: if (allMatchesForModal) {
+    console.log('[SwissBoard] allMatchesForModal updated', {
+      totalCount: allMatchesForModal.length,
+      completedCount: completedMatches.length,
+      incompleteCount: incompleteMatches.length,
+      tbdCount: tbdMatches.length,
+      rounds: Array.from(new Set(allMatchesForModal.map(m => m?.round))).sort(),
+      withWinners: allMatchesForModal.filter(m => m?.winner != null).length
+    });
+  }
   
   // 安全获取对象属性
   function safeGet(obj, prop, defaultValue = '') {
@@ -69,21 +88,45 @@
   }
   
   onMount(async () => {
+    console.log('[SwissBoard] onMount starting...');
     try {
       const response = await fetch('/matches.json');
+      console.log('[SwissBoard] fetch response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('[SwissBoard] raw data received:', data);
+      
       teams = Array.isArray(safeGet(data, 'teams')) ? safeGet(data, 'teams') : [];
       const originalMatches = Array.isArray(safeGet(data, 'rounds')) ? safeGet(data, 'rounds') : [];
+      
+      console.log('[SwissBoard] onMount loaded data', {
+        teamsCount: teams.length,
+        originalMatchesCount: originalMatches.length,
+        originalMatchesRounds: Array.from(new Set(originalMatches.map(m => m?.round))).sort()
+      });
       
       // 分离已完成和未完成的比赛
       completedMatches = originalMatches.filter(match => safeGet(match, 'winner') !== null);
       incompleteMatches = originalMatches.filter(match => safeGet(match, 'winner') === null);
       
+      console.log('[SwissBoard] matches separated', {
+        completedCount: completedMatches.length,
+        incompleteCount: incompleteMatches.length
+      });
+      
       // 生成TBD比赛容器
       tbdMatches = generateTBDMatches(teams, originalMatches);
       
+      console.log('[SwissBoard] TBD matches generated', {
+        tbdCount: tbdMatches.length
+      });
+      
     } catch (error) {
-      console.error('Failed to load matches data:', error);
+      console.error('[SwissBoard] Failed to load matches data:', error);
     }
   });
   
@@ -351,7 +394,7 @@
     }
     
     if (isWinner) {
-      classes += 'bg-green-200 text-green-800 font-semibold ';
+      classes += 'bg-green-200 text-green-800 ';
     } else if (getMatchWinner(match) && !isWinner) {
       classes += 'bg-gray-200 text-gray-600 ';
     } else {
@@ -363,6 +406,38 @@
     }
     
     return classes;
+  }
+
+  function handleApplyDrawResults(event) {
+    const { round, matches } = event.detail;
+    
+    console.log('[SwissBoard] Applying draw results', { round, matches });
+    
+    // 找到对应轮次的TBD比赛并替换
+    matches.forEach(drawMatch => {
+      // 在tbdMatches中找到对应的比赛
+      const tbdMatchIndex = tbdMatches.findIndex(tbdMatch => 
+        tbdMatch.round === round && 
+        tbdMatch.group === drawMatch.group &&
+        tbdMatch.teamA === 'TBD' && 
+        tbdMatch.teamB === 'TBD'
+      );
+      
+      if (tbdMatchIndex !== -1) {
+        // 更新TBD比赛的队伍信息
+        tbdMatches[tbdMatchIndex] = {
+          ...tbdMatches[tbdMatchIndex],
+          teamA: drawMatch.teamA,
+          teamB: drawMatch.teamB,
+          format: drawMatch.format || 'Bo1'
+        };
+      }
+    });
+    
+    // 触发响应式更新
+    tbdMatches = [...tbdMatches];
+    
+    console.log('[SwissBoard] Draw results applied successfully');
   }
 </script>
 
@@ -439,8 +514,18 @@
     </div>
   </div>
   
+  <!-- 模拟抽签按钮 -->
+  <div class="mt-8 text-center">
+    <button 
+      class="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors font-semibold"
+      on:click={() => showDrawModal = true}
+    >
+      模拟抽签
+    </button>
+  </div>
+
   <!-- 队伍状态总览 -->
-  <div class="mt-8 bg-white rounded-lg p-6">
+  <div class="mt-6 bg-white rounded-lg p-6">
     <h2 class="text-xl font-semibold mb-4">队伍状态</h2>
     <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
       {#each teams as team}
@@ -462,6 +547,15 @@
     </div>
   </div>
 </div>
+
+<!-- 模拟抽签弹窗 -->
+<DrawSimulationModal 
+  bind:isOpen={showDrawModal}
+  {teams}
+  allMatches={allMatchesForModal}
+  on:close={() => showDrawModal = false}
+  on:applyResults={handleApplyDrawResults}
+/>
 
 <style>
   select {
