@@ -6,7 +6,14 @@
     getPossibleOpponents,
     getTeamStatus
   } from './swissLogic.js';
+  import { 
+    simulateDrawForRound,
+    calculateOpponentProbabilities,
+    validateDrawState,
+    getNextDrawRound
+  } from './drawSimulation.js';
   import DrawSimulationModal from './DrawSimulationModal.svelte';
+  import ProbabilityAnalysisModal from './ProbabilityAnalysisModal.svelte';
 
   
   let teams = [];
@@ -16,8 +23,15 @@
   let incompleteMatches = []; // 2. JSON获取的真实数据，winner为null的，支持用户指定胜者
   let tbdMatches = []; // 3. 缺失的比赛数据，由TBD vs TBD填充，支持用户选择对手和胜者
   
+  // 概率设置相关状态
+  let matchProbabilities = new Map(); // 存储每场比赛的概率设置
+  let showProbabilityModal = false;
+  let currentProbabilityMatch = null;
+  let tempProbabilityA = 50; // 临时概率值
+  
   // 模拟抽签弹窗状态
   let showDrawModal = false;
+  let showProbabilityAnalysisModal = false;
   
   // 按轮次组织比赛数据 - 依赖所有比赛容器以确保响应式更新
   $: roundsData = generateRoundsData(teams, completedMatches, incompleteMatches, tbdMatches);
@@ -55,6 +69,101 @@
   function getMatchTeam(match, position) {
     return safeGet(match, position);
   }
+
+  // 获取比赛的唯一标识符
+  function getMatchId(match) {
+    // 支持直接传入字符串ID
+    if (typeof match === 'string') {
+      return match;
+    }
+    const id = safeGet(match, 'id');
+    if (id) return id;
+    const round = safeGet(match, 'round');
+    const group = safeGet(match, 'group');
+    const teamA = safeGet(match, 'teamA');
+    const teamB = safeGet(match, 'teamB');
+    return `${round}_${group}_${teamA}_${teamB}`;
+  }
+
+  // 获取比赛的概率设置
+  function getMatchProbability(match) {
+    const matchId = getMatchId(match);
+    return matchProbabilities.get(matchId) || { teamA: 50, teamB: 50 };
+  }
+
+  // 设置比赛概率
+  function setMatchProbability(match, probabilityA) {
+    const matchId = getMatchId(match);
+    console.log('[SwissBoard] 设置比赛概率:', {
+      matchId,
+      probabilityA,
+      teamA: getMatchTeam(match, 'teamA'),
+      teamB: getMatchTeam(match, 'teamB')
+    });
+    matchProbabilities.set(matchId, {
+      teamA: probabilityA,
+      teamB: 100 - probabilityA
+    });
+    matchProbabilities = new Map(matchProbabilities); // 触发响应式更新
+    console.log('[SwissBoard] 概率设置完成，当前所有概率:', Array.from(matchProbabilities.entries()));
+  }
+
+  // 打开概率设置弹窗
+  function openProbabilityModal(match) {
+    if (!canSetProbability(match)) return;
+    
+    currentProbabilityMatch = match;
+    const currentProb = getMatchProbability(match);
+    tempProbabilityA = currentProb.teamA;
+    showProbabilityModal = true;
+  }
+
+  // 响应式变量，用于强制重新渲染样式
+  let styleUpdateTrigger = 0;
+  
+  // 保存概率设置
+  function saveProbability() {
+    if (currentProbabilityMatch) {
+      setMatchProbability(currentProbabilityMatch, Number(tempProbabilityA));
+      
+      // 强制触发响应式更新以重新渲染样式
+      // 通过重新赋值数组来触发Svelte的响应式系统
+      incompleteMatches = [...incompleteMatches];
+      tbdMatches = [...tbdMatches];
+      completedMatches = [...completedMatches];
+      
+      // 增加样式更新触发器
+      styleUpdateTrigger++;
+      
+      console.log('[SwissBoard] 概率保存后强制重新渲染', {
+        matchId: getMatchId(currentProbabilityMatch),
+        newProbability: Number(tempProbabilityA),
+        totalProbabilities: matchProbabilities.size,
+        styleUpdateTrigger
+      });
+    }
+    showProbabilityModal = false;
+    currentProbabilityMatch = null;
+  }
+
+  // 取消概率设置
+  function cancelProbability() {
+    showProbabilityModal = false;
+    currentProbabilityMatch = null;
+  }
+
+  // 检查是否可以设置概率
+  function canSetProbability(match) {
+    // 已确定胜者的比赛不能设置概率
+    if (getMatchWinner(match)) return false;
+    
+    // 队伍未确定的比赛不能设置概率
+    const teamA = getMatchTeam(match, 'teamA');
+    const teamB = getMatchTeam(match, 'teamB');
+    if (teamA === 'TBD' || teamB === 'TBD') return false;
+    
+    return true;
+  }
   
   // 生成TBD比赛容器
   function generateTBDMatches(teams, existingMatches) {
@@ -77,7 +186,7 @@
             teamA: 'TBD',
             teamB: 'TBD',
             winner: null,
-            format: group,
+            format: "未抽签",
             isTBD: true
           });
         }
@@ -374,7 +483,7 @@
   }
   
   function getMatchClass(match) {
-    let classes = 'border rounded-lg p-2 mb-1.5 w-full ';
+    let classes = 'border rounded-lg p-2 mb-1.5 w-full relative ';
     
     if (getMatchWinner(match)) {
       classes += 'border-green-500 bg-green-50 ';
@@ -388,7 +497,7 @@
   }
   
   function getTeamClass(match, team, isWinner) {
-    let classes = 'p-2 rounded cursor-pointer transition-colors ';
+    let classes = 'p-2 rounded cursor-pointer transition-colors relative ';
     
     // 如果比赛不可编辑，移除cursor-pointer并添加禁用样式
     if (!isMatchEditable(match)) {
@@ -408,6 +517,231 @@
     }
     
     return classes;
+  }
+
+  // 获取队伍的概率背景样式
+  function getTeamProbabilityStyle(match, team) {
+    // 如果比赛已经有胜者，不显示概率样式
+    if (getMatchWinner(match)) {
+      return '';
+    }
+    
+    // 如果队伍未确定，不显示概率样式
+    const teamA = getMatchTeam(match, 'teamA');
+    const teamB = getMatchTeam(match, 'teamB');
+    if (teamA === 'TBD' || teamB === 'TBD') {
+      return '';
+    }
+    
+    const probability = getMatchProbability(match);
+    
+    console.log('[SwissBoard] 获取队伍概率背景样式:', {
+      team,
+      teamA,
+      teamB,
+      probability,
+      matchId: getMatchId(match)
+    });
+    
+    let teamProb = 50;
+    if (team === teamA) {
+      teamProb = probability.teamA;
+    } else if (team === teamB) {
+      teamProb = probability.teamB;
+    }
+    
+    console.log('[SwissBoard] 队伍概率计算结果:', {
+      team,
+      teamProb,
+      isTeamA: team === teamA,
+      isTeamB: team === teamB
+    });
+    
+    // 如果概率为默认值50%，不设置背景
+    if (teamProb === 50) {
+      console.log('[SwissBoard] 概率为50%，不设置背景');
+      return '';
+    }
+    
+    // 根据概率设置背景色
+    let style = '';
+    if (teamProb > 50) {
+      // 胜率较高的队伍使用淡蓝色背景
+      const intensity = (teamProb - 50) / 50; // 0-1 范围
+      const alpha = 0.15 + intensity * 0.35; // 0.15-0.5 透明度
+      style = `background-color: rgba(59, 130, 246, ${alpha}) !important; border-color: rgba(59, 130, 246, 0.3) !important;`; // 蓝色
+    } else {
+      // 胜率较低的队伍使用淡红色背景
+      const intensity = (50 - teamProb) / 50; // 0-1 范围
+      const alpha = 0.15 + intensity * 0.35; // 0.15-0.5 透明度
+      style = `background-color: rgba(239, 68, 68, ${alpha}) !important; border-color: rgba(239, 68, 68, 0.3) !important;`; // 红色
+    }
+    
+    console.log('[SwissBoard] 生成的背景样式:', {
+      teamProb,
+      style,
+      intensity: teamProb > 50 ? (teamProb - 50) / 50 : (50 - teamProb) / 50,
+      alpha: teamProb > 50 ? 0.15 + ((teamProb - 50) / 50) * 0.35 : 0.15 + ((50 - teamProb) / 50) * 0.35
+    });
+    return style;
+  }
+
+  // 概率推演功能
+  function performProbabilityAnalysis() {
+    // 获取所有比赛数据
+    const allMatches = getAllMatches();
+    
+    // 找到所有未完成的比赛
+    const pendingMatches = allMatches.filter(match => 
+      !getMatchWinner(match) && 
+      getMatchTeam(match, 'teamA') !== 'TBD' && 
+      getMatchTeam(match, 'teamB') !== 'TBD'
+    );
+
+    if (pendingMatches.length === 0) {
+      alert('没有待推演的比赛');
+      return;
+    }
+
+    console.log('开始概率推演...');
+
+    // 创建包含概率信息的比赛数据
+    const matchesWithProbabilities = allMatches.map(match => {
+      const prob = getMatchProbability(match);
+      
+      if (getMatchWinner(match)) {
+        // 已完成的比赛，胜者概率为100%
+        return {
+          ...match,
+          winnerProbability: 1.0
+        };
+      } else if (getMatchTeam(match, 'teamA') !== 'TBD' && getMatchTeam(match, 'teamB') !== 'TBD') {
+        // 未完成但队伍已确定的比赛，使用设置的概率
+        return {
+          ...match,
+          teamAProbability: prob.teamA / 100,
+          teamBProbability: prob.teamB / 100
+        };
+      } else {
+        return match;
+      }
+    });
+
+    // 使用蒙特卡洛方法模拟多种可能的结果
+    const simulations = 1000;
+    const meetingProbabilities = new Map();
+    
+    // 获取所有活跃队伍
+    const activeTeams = teams.filter(team => {
+      const record = getTeamRecord(team.name, allMatches);
+      const status = getTeamStatus(record);
+      return status.status === 'active';
+    });
+
+    // 初始化相遇概率统计
+    for (let i = 0; i < activeTeams.length; i++) {
+      for (let j = i + 1; j < activeTeams.length; j++) {
+        const teamA = activeTeams[i].name;
+        const teamB = activeTeams[j].name;
+        const key = `${teamA}_vs_${teamB}`;
+        meetingProbabilities.set(key, 0);
+      }
+    }
+
+    // 进行蒙特卡洛模拟
+    for (let sim = 0; sim < simulations; sim++) {
+      // 模拟当前轮次的所有比赛结果
+      const simulatedMatches = [...allMatches];
+      
+      pendingMatches.forEach(match => {
+        const probability = getMatchProbability(match);
+        const teamA = getMatchTeam(match, 'teamA');
+        const teamB = getMatchTeam(match, 'teamB');
+        
+        // 根据概率决定胜者
+        const random = Math.random();
+        const winner = random < (probability.teamA / 100) ? teamA : teamB;
+        
+        // 更新模拟的比赛结果
+        const matchIndex = simulatedMatches.findIndex(m => 
+          m.round === match.round && 
+          getMatchTeam(m, 'teamA') === teamA && 
+          getMatchTeam(m, 'teamB') === teamB
+        );
+        
+        if (matchIndex !== -1) {
+          simulatedMatches[matchIndex] = {
+            ...simulatedMatches[matchIndex],
+            winner: winner
+          };
+        }
+      });
+
+      // 计算下一轮的抽签
+      try {
+        const nextRound = getNextDrawRound(teams, simulatedMatches);
+        const drawResult = simulateDrawForRound(teams, simulatedMatches, nextRound);
+        
+        // 统计相遇情况
+        if (drawResult && drawResult.matches) {
+          drawResult.matches.forEach(match => {
+            const teamA = match.teamA;
+            const teamB = match.teamB;
+            
+            if (teamA && teamB && teamA !== 'TBD' && teamB !== 'TBD') {
+              const key1 = `${teamA}_vs_${teamB}`;
+              const key2 = `${teamB}_vs_${teamA}`;
+              
+              if (meetingProbabilities.has(key1)) {
+                meetingProbabilities.set(key1, meetingProbabilities.get(key1) + 1);
+              } else if (meetingProbabilities.has(key2)) {
+                meetingProbabilities.set(key2, meetingProbabilities.get(key2) + 1);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        // 忽略单次模拟错误
+        continue;
+      }
+    }
+
+    // 转换为概率并显示结果
+    const results = [];
+    meetingProbabilities.forEach((count, key) => {
+      const probabilityPct = Number(((count / simulations) * 100).toFixed(1));
+      if (probabilityPct > 0) {
+        const [teamA, teamB] = key.split('_vs_');
+        results.push({
+          teamA,
+          teamB,
+          probability: probabilityPct
+        });
+      }
+    });
+
+    // 按概率降序排序
+    results.sort((a, b) => b.probability - a.probability);
+
+    // 显示结果
+    if (results.length > 0) {
+      let message = '下一轮抽签概率分析结果：\n\n';
+      results.forEach(result => {
+        if (result.probability >= 1.0) { // 只显示概率大于等于1%的结果
+          message += `${result.teamA} vs ${result.teamB}: ${result.probability}%\n`;
+        }
+      });
+      
+      if (message === '下一轮抽签概率分析结果：\n\n') {
+        message += '所有队伍相遇概率都低于1%';
+      }
+      
+      alert(message);
+    } else {
+      alert('无法计算下一轮抽签概率，请检查比赛设置');
+    }
+
+    console.log('概率推演完成', results);
   }
 
   function handleApplyDrawResults(event) {
@@ -457,7 +791,7 @@
           {#each safeGet(roundData, 'groups', []) as group}
             <div class="mb-4">
               <h3 class="text-sm font-medium mb-1.5 text-gray-700 border-b pb-1">
-                {safeGet(group, 'name')} 组别
+                {safeGet(group, 'name')}
               </h3>
               
               {#each safeGet(group, 'matches', []) as match}
@@ -468,6 +802,7 @@
                   
                   <!-- 队伍A -->
                   <div class={getTeamClass(match, getMatchTeam(match, 'teamA'), getMatchWinner(match) === getMatchTeam(match, 'teamA'))}
+                       style="{getTeamProbabilityStyle(match, getMatchTeam(match, 'teamA'))} {styleUpdateTrigger ? '' : ''}"
                        role="button"
                        tabindex="0"
                        on:click={() => isMatchEditable(match) && handleWinnerSelect(match, getMatchTeam(match, 'teamA'))}
@@ -475,7 +810,7 @@
                     {#if getMatchTeam(match, 'teamA') === 'TBD'}
                       <select class="w-full bg-transparent border-none outline-none text-sm"
                               on:change={(e) => handleTeamSelect(match, 'teamA', e.target.value)}>
-                        <option value="TBD">选择...</option>
+                        <option value="TBD">TBD..</option>
                         {#each getAvailableTeams(match, 'teamA') as team}
                           <option value={safeGet(team, 'name')}>{safeGet(team, 'name')}</option>
                         {/each}
@@ -483,12 +818,24 @@
                     {:else}
                       <div class="flex justify-between items-center text-sm">
                         <span class="truncate">{getMatchTeam(match, 'teamA')}</span>
+                        {#if canSetProbability(match)}
+                          <button 
+                            class="ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+                            on:click|stopPropagation={() => openProbabilityModal(match)}
+                            title="设置胜率">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                          </button>
+                        {/if}
                       </div>
                     {/if}
                   </div>
                   
                   <!-- 队伍B -->
                   <div class={getTeamClass(match, getMatchTeam(match, 'teamB'), getMatchWinner(match) === getMatchTeam(match, 'teamB'))}
+                       style="{getTeamProbabilityStyle(match, getMatchTeam(match, 'teamB'))} {styleUpdateTrigger ? '' : ''}"
                        role="button"
                        tabindex="0"
                        on:click={() => isMatchEditable(match) && handleWinnerSelect(match, getMatchTeam(match, 'teamB'))}
@@ -496,7 +843,7 @@
                     {#if getMatchTeam(match, 'teamB') === 'TBD'}
                       <select class="w-full bg-transparent border-none outline-none text-sm"
                               on:change={(e) => handleTeamSelect(match, 'teamB', e.target.value)}>
-                        <option value="TBD">选择...</option>
+                        <option value="TBD">TBD..</option>
                         {#each getAvailableTeams(match, 'teamB') as team}
                           <option value={safeGet(team, 'name')}>{safeGet(team, 'name')}</option>
                         {/each}
@@ -517,12 +864,19 @@
   </div>
   
   <!-- 模拟抽签按钮 -->
-  <div class="mt-8 text-center">
+  <div class="mt-8 text-center space-x-4">
     <button 
       class="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 transition-colors font-semibold"
       on:click={() => showDrawModal = true}
     >
       模拟抽签
+    </button>
+    
+    <button 
+      class="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+      on:click={() => showProbabilityAnalysisModal = true}
+    >
+      概率推演
     </button>
   </div>
 
@@ -558,6 +912,73 @@
   on:close={() => showDrawModal = false}
   on:applyResults={handleApplyDrawResults}
 />
+
+<!-- 概率分析弹窗 -->
+<ProbabilityAnalysisModal 
+  bind:isOpen={showProbabilityAnalysisModal}
+  {teams}
+  allMatches={allMatchesForModal}
+  {getMatchProbability}
+  on:close={() => showProbabilityAnalysisModal = false}
+/>
+
+<!-- 概率设置弹窗 -->
+{#if showProbabilityModal && currentProbabilityMatch}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <h3 class="text-lg font-semibold mb-4">设置比赛胜率</h3>
+      
+      <div class="mb-4">
+        <div class="text-sm text-gray-600 mb-2">
+          {getMatchTeam(currentProbabilityMatch, 'teamA')} vs {getMatchTeam(currentProbabilityMatch, 'teamB')}
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label for="probA" class="block text-sm font-medium text-gray-700 mb-2">
+              {getMatchTeam(currentProbabilityMatch, 'teamA')} 胜率: {tempProbabilityA}%
+            </label>
+            <input 
+              id="probA"
+              type="range" 
+              min="0" 
+              max="100" 
+              bind:value={tempProbabilityA}
+              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+          
+          <div>
+            <p class="block text-sm font-medium text-gray-700 mb-2">
+              {getMatchTeam(currentProbabilityMatch, 'teamB')} 胜率: {100 - Number(tempProbabilityA)}%
+            </p>
+            <div class="w-full h-2 bg-gray-200 rounded-lg relative" aria-label="{getMatchTeam(currentProbabilityMatch, 'teamB')} 胜率条">
+              <div 
+                class="h-full bg-blue-500 rounded-lg transition-all duration-200"
+                style="width: {100 - Number(tempProbabilityA)}%"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex justify-end space-x-3">
+        <button 
+          class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+          on:click={cancelProbability}
+        >
+          取消
+        </button>
+        <button 
+          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          on:click={saveProbability}
+        >
+          保存
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   select {

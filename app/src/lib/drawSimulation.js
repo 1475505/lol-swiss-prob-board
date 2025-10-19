@@ -350,32 +350,53 @@ export function calculateOpponentProbabilities(teamName, teams, allMatches, roun
   if (probabilities.length === 0) {
     const adjacentGroups = getAdjacentGroups(targetGroup, groups);
     
-    adjacentGroups.forEach(groupKey => {
-      if (groups[groupKey]) {
-        const adjacentOpponents = groups[groupKey].filter(team => {
-          const teamStatus = getTeamStatus(getTeamRecord(team.name, validMatches));
-          return team.name !== teamName && 
-                 teamStatus.status === 'active' && 
-                 !playedOpponents.includes(team.name);
-        });
-        
-        adjacentOpponents.forEach(opponent => {
-          const targetTeam = teams.find(t => t.name === teamName);
-          const opponentTeam = teams.find(t => t.name === opponent.name);
-          
-          let prob = 1.0 / adjacentOpponents.length * 0.5; // 相邻组概率较低
-          
-          if (targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-            prob *= 0.3;
-          }
-          
-          probabilities.push({
-            opponent: opponent.name,
-            probability: prob
+    let searchGroups = adjacentGroups;
+    let distance = 1;
+
+    // 如果在相邻组别中也找不到对手，则扩大搜索范围
+    while (probabilities.length === 0 && distance <= 5) {
+      searchGroups.forEach(groupKey => {
+        if (groups[groupKey]) {
+          const opponents = groups[groupKey].filter(team => {
+            const teamStatus = getTeamStatus(getTeamRecord(team.name, validMatches));
+            return team.name !== teamName && 
+                   teamStatus.status === 'active' && 
+                   !playedOpponents.includes(team.name);
           });
+          
+          opponents.forEach(opponent => {
+            const targetTeam = teams.find(t => t.name === teamName);
+            const opponentTeam = teams.find(t => t.name === opponent.name);
+            
+            // 根据距离调整概率，距离越远，概率越低
+            let prob = (1.0 / opponents.length) * Math.pow(0.5, distance);
+            
+            if (targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
+              prob *= 0.3; // 同地区回避
+            }
+            
+            probabilities.push({
+              opponent: opponent.name,
+              probability: prob
+            });
+          });
+        }
+      });
+
+      // 如果仍然没有找到对手，则扩大搜索范围
+      if (probabilities.length === 0) {
+        distance++;
+        const nextSearchGroups = new Set();
+        searchGroups.forEach(group => {
+          const [wins, losses] = group.split('-').map(Number);
+          const upperGroup = `${wins + 1}-${losses}`;
+          const lowerGroup = `${wins}-${losses + 1}`;
+          if (groups[upperGroup]) nextSearchGroups.add(upperGroup);
+          if (groups[lowerGroup]) nextSearchGroups.add(lowerGroup);
         });
+        searchGroups = Array.from(nextSearchGroups);
       }
-    });
+    }
   }
   
   // 归一化概率
