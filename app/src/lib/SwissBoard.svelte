@@ -90,15 +90,17 @@
   onMount(async () => {
     console.log('[SwissBoard] onMount starting...');
     try {
-      const response = await fetch('/matches.json');
-      console.log('[SwissBoard] fetch response status:', response.status);
+      // Fetch data from public directory with proper base path handling
+      const basePath = import.meta.env.BASE_URL || '/';
+      const fetchUrl = `${basePath}matches.json`.replace(/\/+/g, '/');
+      console.log('[SwissBoard] fetching from:', fetchUrl);
       
+      const response = await fetch(fetchUrl);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`Failed to fetch matches.json: ${response.status} ${response.statusText}`);
       }
-      
       const data = await response.json();
-      console.log('[SwissBoard] raw data received:', data);
+      console.log('[SwissBoard] fetched data:', data);
       
       teams = Array.isArray(safeGet(data, 'teams')) ? safeGet(data, 'teams') : [];
       const originalMatches = Array.isArray(safeGet(data, 'rounds')) ? safeGet(data, 'rounds') : [];

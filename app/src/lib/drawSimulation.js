@@ -10,14 +10,17 @@ import {
 
 /**
  * 获取第一轮的抽签池配置
+ * TODO: 第1轮抽签暂不支持（涉及种子设定）
  * @param {Array} teams - 队伍列表
  * @returns {Object} - {pool1: Array, pool2: Array, pool3: Array}
  */
 export function getFirstRoundPools(teams) {
-  // 简化版本：假设前8队为Pool1，中8队为Pool2，后8队为Pool3
-  const pool1 = teams.slice(0, 8);
-  const pool2 = teams.slice(8, 16);
-  const pool3 = teams.slice(16, 24);
+  // TODO: 需要根据实际种子设定来分池，而不是简单按顺序切分
+  // 根据规则：池1 5队、池2 6队、池3 5队
+  // 目前只有16支队伍，需要调整分池逻辑
+  const pool1 = teams.slice(0, 5);  // 前5队为Pool1
+  const pool2 = teams.slice(5, 11); // 中6队为Pool2  
+  const pool3 = teams.slice(11, 16); // 后5队为Pool3
   
   return { pool1, pool2, pool3 };
 }
@@ -34,10 +37,16 @@ export function isSameRegion(teamA, teamB) {
 
 /**
  * 模拟第一轮抽签
+ * TODO: 第1轮抽签暂不支持（涉及种子设定）
  * @param {Array} teams - 队伍列表
  * @returns {Array} - 比赛列表
  */
 export function simulateFirstRoundDraw(teams) {
+  // TODO: 第1轮抽签需要考虑种子设定，暂时禁用
+  throw new Error('第1轮抽签暂不支持（涉及种子设定）');
+  
+  // 以下代码保留作为参考，但暂时不使用
+  /*
   // 过滤掉已晋级或淘汰的队伍（虽然第一轮通常不会有这种情况）
   const activeTeams = teams.filter(team => {
     // 第一轮时所有队伍都应该是活跃的，但为了保险起见还是检查一下
@@ -125,6 +134,7 @@ export function simulateFirstRoundDraw(teams) {
   }
   
   return matches;
+  */
 }
 
 /**

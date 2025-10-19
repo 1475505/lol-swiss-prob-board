@@ -23,35 +23,44 @@
     });
   });
 
-  $: if (isOpen) {
-    console.log('[DrawSimulationModal] opened', {
-      teamsCount: Array.isArray(teams) ? teams.length : 0,
-      allMatchesCount: Array.isArray(allMatches) ? allMatches.length : 0,
-      beforeTargetRoundsCount: Array.isArray(allMatches) ? allMatches.filter(m => m?.round < targetRound).length : 0,
-      winnersBeforeTargetRound: Array.isArray(allMatches) ? allMatches.filter(m => m?.round < targetRound && m?.winner != null).length : 0
-    });
-    
-    // 当模态框打开时，自动设置为下一个可模拟的轮次
-    const nextRound = getNextDrawRound(teams, allMatches);
-    if (nextRound <= 5) {
-      targetRound = nextRound;
-    }
-  }
-
   let isSimulating = false;
   let simulationResult = null;
   let simulationError = null;
   let selectedTeam = '';
-  let targetRound = 1; // 用户指定的目标轮次
+  
+  // 计算默认的目标轮次
+  $: defaultTargetRound = (() => {
+    const nextRound = getNextDrawRound(teams, allMatches);
+    // TODO: 第1轮抽签暂不支持（涉及种子设定）
+    return nextRound <= 5 && nextRound > 1 ? nextRound : 2;
+  })();
+  
+  let targetRound; // 用户指定的目标轮次，初始值为undefined
+  
+  // 当模态框打开时，如果targetRound未定义，则设置为默认值
+  $: if (isOpen && targetRound === undefined) {
+    targetRound = defaultTargetRound;
+  }
+  
   let opponentProbabilities = [];
 
   // 计算可用的轮次选项
   $: availableRounds = (() => {
+    console.log('[DrawSimulationModal] calculating availableRounds', {
+      teamsCount: Array.isArray(teams) ? teams.length : 0,
+      allMatchesCount: Array.isArray(allMatches) ? allMatches.length : 0
+    });
+    
     const nextRound = getNextDrawRound(teams, allMatches);
+    console.log('[DrawSimulationModal] nextRound from getNextDrawRound:', nextRound);
+    
     const rounds = [];
-    for (let i = 1; i <= Math.min(nextRound, 5); i++) {
+    // TODO: 第1轮抽签暂不支持（涉及种子设定）
+    for (let i = 2; i <= Math.min(nextRound, 5); i++) {
       rounds.push(i);
     }
+    
+    console.log('[DrawSimulationModal] availableRounds:', rounds);
     return rounds;
   })();
 
@@ -151,9 +160,9 @@
     }
   }
 
-  function handleRoundSelect(event) {
-    targetRound = parseInt(event.target.value);
-    // 清空之前的结果
+  // 当目标轮次改变时，清空之前的结果
+  $: if (targetRound) {
+    console.log('[DrawSimulationModal] targetRound changed to:', targetRound);
     simulationResult = null;
     opponentProbabilities = [];
     simulationError = null;
@@ -444,18 +453,18 @@
         <!-- 轮次选择 -->
         <div class="section">
           <h3>选择目标轮次</h3>
-          <select class="round-select" bind:value={targetRound} on:change={handleRoundSelect}>
+          <select class="round-select" bind:value={targetRound}>
             {#each availableRounds as round}
               <option value={round}>第{round}轮</option>
             {/each}
           </select>
-          <p class="round-info">当前可模拟轮次：第1轮 - 第{Math.max(...availableRounds)}轮</p>
+          <p class="round-info">当前可模拟轮次：第2轮 - 第{availableRounds.length > 0 ? Math.max(...availableRounds) : 2}轮（第1轮代码暂不支持，涉及种子设定）</p>
         </div>
 
         <!-- 模拟抽签部分 -->
         <div class="section">
           <h3>模拟抽签</h3>
-          <p>根据当前战绩状态，模拟第 {targetRound} 轮的对战抽签结果</p>
+          <p>点击「开始模拟」按钮，根据当前战绩状态模拟所选轮次的对战抽签结果</p>
           
           <!-- svelte-ignore a11y-click-events-have-key-events -->
           <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -511,7 +520,7 @@
         <!-- 对手查询部分 -->
         <div class="section">
           <h3>对手查询</h3>
-          <p>选择队伍，查看其在第 {targetRound} 轮可能遇到的对手</p>
+          <p>选择队伍后，将显示其在所选轮次可能遇到的对手</p>
           
           <select class="team-select" on:change={handleTeamSelect}>
             <option value="">请选择队伍</option>
