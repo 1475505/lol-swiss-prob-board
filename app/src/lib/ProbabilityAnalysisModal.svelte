@@ -55,6 +55,7 @@
    * @typedef {Object} AnalysisResults
    * @property {string} [teamName]
    * @property {string} [currentRecord]
+   * @property {string} [currentRoundOpponent]
    * @property {Scenario} [winScenario]
    * @property {Scenario} [lossScenario]
    * @property {OpponentProb[]} [summary]
@@ -352,6 +353,12 @@
     // 找到该战队在本轮的比赛
     const teamMatchThisRound = allCurrentRoundMatches.find(m => m.teamA === teamName || m.teamB === teamName);
 
+    // 获取战队在概率轮次的对手
+    let currentRoundOpponent = null;
+    if (teamMatchThisRound) {
+      currentRoundOpponent = teamMatchThisRound.teamA === teamName ? teamMatchThisRound.teamB : teamMatchThisRound.teamA;
+    }
+
     // 获取用于枚举的未确定结果的比赛
     const undecidedMatches = allCurrentRoundMatches.filter(match => !match.winner);
 
@@ -421,6 +428,7 @@
     return {
       teamName,
       currentRecord: currentRecordStr,
+      currentRoundOpponent, // 添加概率轮次的对手信息
       winScenario: {
         probability: winTotalProbability,
         nextRecord: `${currentRecord.wins + 1}-${currentRecord.losses}`,
@@ -689,7 +697,6 @@
                   {/each}
                 </select>
               </div>
-
             {:else}
               <div>
                 <label for="team-a-pair" class="block text-sm font-medium text-gray-700 mb-2">
@@ -743,11 +750,24 @@
           <div class="border-t pt-6">
             <h3 class="text-lg font-semibold mb-4">分析结果</h3>
             
-
-
             {#if analysisResults.teamName}
               <div class="mb-4">
                 <h4 class="text-xl font-bold mb-3">{analysisResults.teamName} ({analysisResults.currentRecord})</h4>
+
+                <!-- 显示概率轮次的对手信息 -->
+                {#if analysisResults.currentRoundOpponent}
+                  <div class="mb-4 p-3 border rounded-lg bg-blue-50">
+                    <h5 class="font-semibold text-blue-800 mb-1">第{probabilityRound}轮对手</h5>
+                    <p class="text-blue-700">
+                      <span class="font-bold">{analysisResults.teamName}</span> vs <span class="font-bold">{analysisResults.currentRoundOpponent}</span>
+                    </p>
+                  </div>
+                {:else}
+                  <div class="mb-4 p-3 border rounded-lg bg-gray-50">
+                    <h5 class="font-semibold text-gray-600 mb-1">第{probabilityRound}轮对手</h5>
+                    <p class="text-gray-600">该战队在第{probabilityRound}轮没有比赛</p>
+                  </div>
+                {/if}
 
                 <!-- Win Scenario -->
                 <div class="mb-4 p-4 border rounded-lg bg-green-50">
