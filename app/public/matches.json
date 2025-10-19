@@ -9,13 +9,13 @@
     { "name": "KT", "zone": "LCK" },
     { "name": "G2", "zone": "LEC" },
     { "name": "FNC", "zone": "LEC" },
-    { "name": "CFO", "zone": "PCS" },
-    { "name": "PSG", "zone": "PCS" },
+    { "name": "MKOI", "zone": "LEC" },
+    { "name": "CFO", "zone": "LCP" },
+    { "name": "PSG", "zone": "LCP" },
+    { "name": "TSW", "zone": "LCP" },
     { "name": "FLY", "zone": "LCS" },
     { "name": "100T", "zone": "LCS" },
-    { "name": "VKS", "zone": "OTHER" },
-    { "name": "TSW", "zone": "OTHER" },
-    { "name": "MKOI", "zone": "OTHER" }
+    { "name": "VKS", "zone": "LCS" }
   ],
   "rounds": [
     {
@@ -177,7 +177,7 @@
       "group": "0-2",
       "teamA": "VKS",
       "teamB": "PSG",
-      "winner": null
+      "winner": "VKS"
     },
     {
       "round": 3,
@@ -185,6 +185,48 @@
       "teamA": "MKOI",
       "teamB": "FNC",
       "winner": "MKOI"
+    },
+    {
+      "round": 4,
+      "group": "2-1",
+      "teamA": "G2",
+      "teamB": "FLY",
+      "winner": null
+    },
+    {
+      "round": 4,
+      "group": "2-1",
+      "teamA": "GEN",
+      "teamB": "TES",
+      "winner": null
+    },
+    {
+      "round": 4,
+      "group": "2-1",
+      "teamA": "HLE",
+      "teamB": "CFO",
+      "winner": null
+    },
+    {
+      "round": 4,
+      "group": "1-2",
+      "teamA": "BLG",
+      "teamB": "VKS",
+      "winner": null
+    },
+    {
+      "round": 4,
+      "group": "1-2",
+      "teamA": "MKOI",
+      "teamB": "TSW",
+      "winner": null
+    },
+    {
+      "round": 4,
+      "group": "1-2",
+      "teamA": "100T",
+      "teamB": "T1",
+      "winner": null
     }
   ]
 }
