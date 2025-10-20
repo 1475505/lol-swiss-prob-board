@@ -93,7 +93,7 @@
     const rounds = [];
     if (!teams || !allMatches || teams.length === 0 || allMatches.length === 0) {
       // 如果数据还没加载，提供默认轮次选项
-      for (let i = 2; i <= 5; i++) rounds.push(i);
+      for (let i = 1; i <= 5; i++) rounds.push(i);
       console.log('[ProbabilityAnalysisModal] 使用默认轮次', rounds);
       return rounds;
     }
@@ -117,7 +117,7 @@
       }
       
       // 生成可用轮次列表
-      for (let i = 2; i <= maxValidRound; i++) {
+      for (let i = 1; i <= maxValidRound; i++) {
         rounds.push(i);
       }
       
@@ -558,7 +558,7 @@
     
     possibilities.forEach(possibility => {
       // 创建包含这种可能性结果的比赛数据
-      const hypotheticalMatches = [...allMatches];
+      const hypotheticalMatches = [...allMatches.filter(m => m.round < targetRound)];
       
       // 更新当前轮次的比赛结果
       possibility.matches.forEach(possibilityMatch => {
@@ -870,10 +870,10 @@
                   <span class="text-sm font-normal text-gray-600">（接下来轮次的比赛都是50%胜率的出线概率）</span>
                 </h4>
                 <p class="text-blue-700 mt-2">
-                  {selectedTeamA} 当前战绩：{analysisResults.qualificationProbability.currentRecord || '未知'}
+                  {selectedTeamA} 当前最新战绩：{analysisResults.qualificationProbability.currentRecord || '未知'}
                 </p>
                 <p class="text-blue-700 font-bold mt-1">
-                  理论出线概率：{(analysisResults.qualificationProbability.probability * 100).toFixed(1)}%
+                  出线概率：{(analysisResults.qualificationProbability.probability * 100).toFixed(1)}%
                 </p>
               </div>
             {/if}
