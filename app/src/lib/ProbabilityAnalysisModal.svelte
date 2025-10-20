@@ -676,8 +676,9 @@
                   bind:group={analysisMode} 
                   value="pair"
                   class="mr-2"
+                  disabled
                 />
-                双队分析（查看两队相遇概率）
+                双队分析（AI代码还有bug，使用单队分析）
               </label>
             </div>
 
