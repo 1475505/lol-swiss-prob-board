@@ -148,8 +148,8 @@ function calculateDrawProbabilitiesForRound(teamName, teams, matches, round) {
         const targetTeam = teams.find(t => t.name === teamName);
         const opponentTeam = teams.find(t => t.name === opponent.name);
         
-        if (targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-          adjustedProb *= 0.3; // 同地区概率降低
+        if (round === 1 && targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
+          adjustedProb *= 0; // 首轮同地区回避
         }
         
         probabilities.push({

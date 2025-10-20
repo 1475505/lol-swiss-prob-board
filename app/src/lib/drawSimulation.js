@@ -333,9 +333,9 @@ export function calculateOpponentProbabilities(teamName, teams, allMatches, roun
         const targetTeam = teams.find(t => t.name === teamName);
         const opponentTeam = teams.find(t => t.name === opponent.name);
         
-        if (targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-          // 同地区队伍配对概率降低
-          adjustedProb *= 0.3; // 降低到30%
+        if (round === 1 && targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
+          // 同地区队伍配对概率0
+          adjustedProb *= 0; // 降低到0%
         }
         
         probabilities.push({
@@ -347,6 +347,7 @@ export function calculateOpponentProbabilities(teamName, teams, allMatches, roun
   }
   
   // 如果同组没有可配对的对手，考虑相邻组别
+  // 应该不会出现这种情况，ai的代码留着
   if (probabilities.length === 0) {
     const adjacentGroups = getAdjacentGroups(targetGroup, groups);
     
@@ -371,8 +372,8 @@ export function calculateOpponentProbabilities(teamName, teams, allMatches, roun
             // 根据距离调整概率，距离越远，概率越低
             let prob = (1.0 / opponents.length) * Math.pow(0.5, distance);
             
-            if (targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-              prob *= 0.3; // 同地区回避
+            if (round === 1 && targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
+              prob *= 0; // 同地区回避
             }
             
             probabilities.push({
