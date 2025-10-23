@@ -284,8 +284,6 @@ export function calculateMeetingProbability(teamA, teamB, teams, completedMatche
  * @returns {Array} 对手概率列表
  */
 export function calculateOpponentProbabilities(teamName, teams, allMatches, round) {
-  // 获取有效的比赛（目标轮次之前且有胜者的比赛）
-  // 这里包括了用户在界面上设置的胜者信息
   const validMatches = allMatches.filter(match => 
     match.round < round && 
     match.winner && 
@@ -294,124 +292,79 @@ export function calculateOpponentProbabilities(teamName, teams, allMatches, roun
     match.teamB !== 'TBD'
   );
   
-  // 获取目标队伍的当前战绩和状态
   const targetTeamRecord = getTeamRecord(teamName, validMatches);
   const targetTeamStatus = getTeamStatus(targetTeamRecord);
   
-  // 如果队伍已经淘汰或晋级，返回空数组
   if (targetTeamStatus.status !== 'active') {
     return [];
   }
   
-  // 按战绩分组所有活跃队伍（使用有效比赛数据）
   const groups = groupTeamsByRecord(teams, validMatches);
-  const targetGroup = `${targetTeamRecord.wins}-${targetTeamRecord.losses}`;
-  
-  // 获取目标队伍已交手的对手
-  const playedOpponents = getPlayedOpponents(teamName, validMatches);
-  
-  // 计算可能的对手及其概率
+  const targetGroupKey = `${targetTeamRecord.wins}-${targetTeamRecord.losses}`;
+  const groupTeams = groups[targetGroupKey] ? groups[targetGroupKey].filter(team => {
+    const teamStatus = getTeamStatus(getTeamRecord(team.name, validMatches));
+    return teamStatus.status === 'active';
+  }) : [];
+
+  if (groupTeams.length < 2) {
+    return [];
+  }
+
+  const opponentCounts = new Map();
+  const totalPairings = [0];
+
+  const teamNamesInGroup = groupTeams.map(t => t.name);
+  const playedOpponentsMap = new Map();
+  teamNamesInGroup.forEach(name => {
+    playedOpponentsMap.set(name, getPlayedOpponents(name, validMatches));
+  });
+
+  findAllValidPairings(teamNamesInGroup, playedOpponentsMap, [], opponentCounts, totalPairings, teamName);
+
+  if (totalPairings[0] === 0) {
+    return [];
+  }
+
   const probabilities = [];
-  
-  // 首先尝试同组配对
-  if (groups[targetGroup]) {
-    const sameGroupOpponents = groups[targetGroup].filter(team => {
-      const teamStatus = getTeamStatus(getTeamRecord(team.name, validMatches));
-      return team.name !== teamName && 
-             teamStatus.status === 'active' && 
-             !playedOpponents.includes(team.name);
-    });
-    
-    if (sameGroupOpponents.length > 0) {
-      // 在同组内，每个对手的基础概率相等
-      const baseProb = 1.0 / sameGroupOpponents.length;
-      
-      sameGroupOpponents.forEach(opponent => {
-        let adjustedProb = baseProb;
-        
-        // 考虑地区回避因素
-        const targetTeam = teams.find(t => t.name === teamName);
-        const opponentTeam = teams.find(t => t.name === opponent.name);
-        
-        if (round === 1 && targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-          // 同地区队伍配对概率0
-          adjustedProb *= 0; // 降低到0%
-        }
-        
-        probabilities.push({
-          opponent: opponent.name,
-          probability: adjustedProb
-        });
+  for (const [opponent, count] of opponentCounts.entries()) {
+    if (opponent !== teamName) {
+      probabilities.push({
+        opponent: opponent,
+        probability: count / totalPairings[0]
       });
     }
   }
-  
-  // 如果同组没有可配对的对手，考虑相邻组别
-  // 应该不会出现这种情况，ai的代码留着
-  if (probabilities.length === 0) {
-    const adjacentGroups = getAdjacentGroups(targetGroup, groups);
-    
-    let searchGroups = adjacentGroups;
-    let distance = 1;
 
-    // 如果在相邻组别中也找不到对手，则扩大搜索范围
-    while (probabilities.length === 0 && distance <= 5) {
-      searchGroups.forEach(groupKey => {
-        if (groups[groupKey]) {
-          const opponents = groups[groupKey].filter(team => {
-            const teamStatus = getTeamStatus(getTeamRecord(team.name, validMatches));
-            return team.name !== teamName && 
-                   teamStatus.status === 'active' && 
-                   !playedOpponents.includes(team.name);
-          });
-          
-          opponents.forEach(opponent => {
-            const targetTeam = teams.find(t => t.name === teamName);
-            const opponentTeam = teams.find(t => t.name === opponent.name);
-            
-            // 根据距离调整概率，距离越远，概率越低
-            let prob = (1.0 / opponents.length) * Math.pow(0.5, distance);
-            
-            if (round === 1 && targetTeam && opponentTeam && isSameRegion(targetTeam, opponentTeam)) {
-              prob *= 0; // 同地区回避
-            }
-            
-            probabilities.push({
-              opponent: opponent.name,
-              probability: prob
-            });
-          });
-        }
-      });
-
-      // 如果仍然没有找到对手，则扩大搜索范围
-      if (probabilities.length === 0) {
-        distance++;
-        const nextSearchGroups = new Set();
-        searchGroups.forEach(group => {
-          const [wins, losses] = group.split('-').map(Number);
-          const upperGroup = `${wins + 1}-${losses}`;
-          const lowerGroup = `${wins}-${losses + 1}`;
-          if (groups[upperGroup]) nextSearchGroups.add(upperGroup);
-          if (groups[lowerGroup]) nextSearchGroups.add(lowerGroup);
-        });
-        searchGroups = Array.from(nextSearchGroups);
-      }
-    }
-  }
-  
-  // 归一化概率
-  const totalProb = probabilities.reduce((sum, p) => sum + p.probability, 0);
-  if (totalProb > 0) {
-    probabilities.forEach(p => {
-      p.probability = p.probability / totalProb;
-    });
-  }
-  
-  // 按概率降序排序
   probabilities.sort((a, b) => b.probability - a.probability);
-  
+
   return probabilities;
+}
+
+function findAllValidPairings(teams, playedOpponentsMap, currentPairing, opponentCounts, totalPairings, targetTeam) {
+  if (teams.length === 0) {
+    totalPairings[0]++;
+    currentPairing.forEach(pair => {
+      if (pair.includes(targetTeam)) {
+        const opponent = pair[0] === targetTeam ? pair[1] : pair[0];
+        opponentCounts.set(opponent, (opponentCounts.get(opponent) || 0) + 1);
+      }
+    });
+    return;
+  }
+
+  const firstTeam = teams[0];
+  const remainingTeams = teams.slice(1);
+
+  for (let i = 0; i < remainingTeams.length; i++) {
+    const potentialOpponent = remainingTeams[i];
+    const firstTeamPlayed = playedOpponentsMap.get(firstTeam);
+
+    if (firstTeamPlayed && !firstTeamPlayed.includes(potentialOpponent)) {
+      const newRemainingTeams = remainingTeams.filter(t => t !== potentialOpponent);
+      const newPairing = [...currentPairing, [firstTeam, potentialOpponent]];
+      findAllValidPairings(newRemainingTeams, playedOpponentsMap, newPairing, opponentCounts, totalPairings, targetTeam);
+    }
+  }
 }
 
 /**
