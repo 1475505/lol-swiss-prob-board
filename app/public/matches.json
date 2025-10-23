@@ -198,7 +198,7 @@
       "group": "2-1",
       "teamA": "GEN",
       "teamB": "TES",
-      "winner": null
+      "winner": "GEN"
     },
     {
       "round": 4,
@@ -219,7 +219,7 @@
       "group": "1-2",
       "teamA": "MKOI",
       "teamB": "TSW",
-      "winner": null
+      "winner": "MKOI"
     },
     {
       "round": 4,
